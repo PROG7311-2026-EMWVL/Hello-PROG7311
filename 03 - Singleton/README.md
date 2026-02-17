@@ -18,5 +18,5 @@ You are developing a Gadget Store Management System that requires a centralized 
    - Display the settings again to confirm that both instances reflect the updated value.
    - Verify and print whether both instances are the same.
 
-   A possible source to consult for different types of singletons
+   ## A possible source to consult for different types of singletons
    - https://csharpindepth.com/articles/singleton
