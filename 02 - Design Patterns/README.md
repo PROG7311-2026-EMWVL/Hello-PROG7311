@@ -22,13 +22,13 @@ Your infographic must:
 
 Note: Clear explanations matter more than neat drawings.
 
-📚 Resources to Read Before You Start
+## 📚 Resources to Read Before You Start
 
 Quick reference material:
 * https://refactoring.guru/design-patterns
 * https://www.digitalocean.com/community/tutorials/gangs-of-four-gof-design-patterns
 
-📦 Required Infographic Sections
+## 📦 Required Infographic Sections
 1. Title
 2. The Big Picture (Overview)
 3. Creational Patterns
@@ -36,5 +36,5 @@ Quick reference material:
 5. Behavioral Patterns
 6. Comparison Section
 
-👥 Group Rules
+## 👥 Group Rules
 You can work alone 
