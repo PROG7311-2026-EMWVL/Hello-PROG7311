@@ -18,6 +18,9 @@ In this activity, we will:
   * https://aws.amazon.com/what-is/api/ - its AWS!
   * https://www.postman.com/api-platform/api-client/ - its Postman!
 
+## Explore this repo
+Let's look at this repo: https://github.com/PROG7311-2026-EMWVL/WeatherClient
+
 ### You need to build a client that incorporates the following functionality:
 1. Check the api allowance (use /api_allowance)
 1. Allow the user to search for their area (use /areas_search)
