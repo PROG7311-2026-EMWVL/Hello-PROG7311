@@ -9,8 +9,8 @@ Here, we add JWT to the MathAPI and client.
     - https://www.freecodecamp.org/news/how-to-sign-and-validate-json-web-tokens/
     - https://www.devskillbuilder.com/understanding-json-web-token-jwt-b7a9a5d6df37
     - https://medium.com/@sajadshafi/jwt-authentication-in-c-net-core-7-web-api-b825b3aee11d
-1. Apply JWT to the API: https://github.com/VCDW-2025-PROG7311/MathAPI/tree/jwt
-1. Apply JWT to the client: https://github.com/VCDW-2025-PROG7311/MathAPIClient/tree/jwt
+1. Apply JWT to the API: https://github.com/PROG7311-2026-EMWVL/MathAPI/commit/06fac63e6372326d755cd94ca5fa407f2c36ffa5
+1. Apply JWT to the client: https://github.com/PROG7311-2026-EMWVL/MathAPIClient/commit/ab6c1d61e68643e2e0f832ad20e408821e5158ac
 
 Where are we?
 1. Revising .NET Entity Framework Core with DB-first (DONE!)
