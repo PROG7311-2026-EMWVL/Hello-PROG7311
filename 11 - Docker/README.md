@@ -9,8 +9,12 @@ Here is the flow:
     1. Dockerize the SQL database in its own container
     1. Place all contain in a single virtual network to allow them to communicate.
 
-## What to do
+## Research and Reading
+* https://www.docker.com/resources/what-container/
+* https://stackoverflow.com/questions/23735149/what-is-the-difference-between-a-docker-image-and-a-container
+* https://cto.ai/blog/docker-image-vs-container-vs-dockerfile/
 
+## What to do
 Check out the MathApp repo for the Docker guide: https://github.com/PROG7311-2026-EMWVL/MathApp/
 
 ## Where are we?
