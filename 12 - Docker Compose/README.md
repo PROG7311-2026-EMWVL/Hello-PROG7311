@@ -245,6 +245,7 @@ Create a file named `Dockerfile` inside the `MathAPIClient` folder.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 
 USER root
+RUN mkdir /keys && chown app:app /keys
 RUN apt-get update && apt-get install -y libgssapi-krb5-2
 USER app
 
@@ -272,15 +273,9 @@ Update Program.cs to use a single base URL and to use the configuration settings
 
 ```
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddSession(options =>
-{
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
 
 builder.Services.Configure<ApiSettings>(
     builder.Configuration.GetSection("ApiSettings"));
@@ -292,6 +287,19 @@ builder.Services.AddHttpClient("MathAPI", (sp, client) =>
 });
 
 builder.Services.AddControllersWithViews();
+
+builder.Services.AddDistributedMemoryCache();
+
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/keys"))
+    .SetApplicationName("MathAPIClient");
 
 var app = builder.Build();
 
@@ -308,7 +316,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseAAuthorization();
+app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
@@ -324,11 +332,10 @@ public class ApiSettings
 
 
 ### Update AuthController.cs and MathController.cs
-Update the `AuthController.cs` to use the HTTP client that gets the base URL from configuration.
+Update the `AuthController.cs` to use the HTTP client that gets the base URL from configuration. Also some changes to avoid conflicts and session issues in containerized environments.
 
 ```
 using System.Text;
-using Firebase.Auth;
 using MathAPIClient.Models;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -337,51 +344,303 @@ namespace MathAPIClient.Controllers
 {
     public class AuthController : Controller
     {
-        private static HttpClient httpClient;
+        private static HttpClient? httpClient;
         public AuthController(IConfiguration configuration)
         {
             if (httpClient == null)
             {
                 var baseUrl = configuration["ApiSettings:BaseUrl"];
 
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    throw new InvalidOperationException("ApiSettings:BaseUrl is missing.");
+                }
+
                 httpClient = new HttpClient
                 {
                     BaseAddress = new Uri(baseUrl)
                 };
             }
         }
-        // rest of your controller code
+
+        [HttpGet]
+        public IActionResult Register()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Register(LoginModel login)
+        {
+            StringContent jsonContent = new(
+                JsonConvert.SerializeObject(login),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            HttpResponseMessage response = await httpClient!.PostAsync("api/Auth/Register", jsonContent);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                AuthResponse? deserialisedResponse = JsonConvert.DeserializeObject<AuthResponse>(jsonResponse);
+
+                if (deserialisedResponse == null)
+                {
+                    ViewBag.Result = "Invalid response from server.";
+                    return View();
+                }
+
+                HttpContext.Session.SetString("currentUser", deserialisedResponse.UserId);
+                HttpContext.Session.SetString("MathJWT", deserialisedResponse.Token);
+
+                return RedirectToAction("Calculate", "Math");
+            }
+            else
+            {
+                ViewBag.Result = await response.Content.ReadAsStringAsync();
+                return View();
+            }
+        }
+
+        [HttpGet]
+        public IActionResult Login()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Login(LoginModel login)
+        {
+            StringContent jsonContent = new(
+                JsonConvert.SerializeObject(login),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            HttpResponseMessage response = await httpClient!.PostAsync("api/Auth/Login", jsonContent);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                AuthResponse? deserialisedResponse = JsonConvert.DeserializeObject<AuthResponse>(jsonResponse);
+
+                if (deserialisedResponse == null)
+                {
+                    ViewBag.Result = "Invalid response from server.";
+                    return View();
+                }
+
+                HttpContext.Session.SetString("currentUser", deserialisedResponse.UserId);
+                HttpContext.Session.SetString("MathJWT", deserialisedResponse.Token);
+
+                return RedirectToAction("Calculate", "Math");
+            }
+            else
+            {
+                ViewBag.Result = await response.Content.ReadAsStringAsync();
+                return View();
+            }
+        }
+
+        [HttpGet]
+        public IActionResult LogOut()
+        {
+            HttpContext.Session.Clear();
+
+            if (httpClient != null)
+            {
+                httpClient.DefaultRequestHeaders.Authorization = null;
+            }
+
+            Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+            Response.Headers["Pragma"] = "no-cache";
+            Response.Headers["Expires"] = "0";
+
+            return RedirectToAction("Login", "Auth");
+        }
+    }
+}
 ```
 
 Also do the same for `MathController.cs`
 
 ```
+using System.Net.Http.Headers;
+using System.Text;
+using MathAPIClient.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using MathAPIClient.Models;
 using Newtonsoft.Json;
-using System.Text;
-using System.Net.Http.Headers;
 
 namespace MathAPIClient.Controllers
 {
     public class MathController : Controller
     {
-
-        private static HttpClient httpClient;
+        private static HttpClient? httpClient;
         public MathController(IConfiguration configuration)
         {
             if (httpClient == null)
             {
                 var baseUrl = configuration["ApiSettings:BaseUrl"];
 
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    throw new InvalidOperationException("ApiSettings:BaseUrl is missing.");
+                }
+
                 httpClient = new HttpClient
                 {
                     BaseAddress = new Uri(baseUrl)
                 };
             }
         }
-        // rest of your controller code
+
+        [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+        public IActionResult Calculate()
+        {
+            var token = HttpContext.Session.GetString("MathJWT");
+
+            if (token == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            ViewBag.Operations = GetOperations();
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+        public async Task<IActionResult> Calculate(decimal? FirstNumber, decimal? SecondNumber, int Operation)
+        {
+            var token = HttpContext.Session.GetString("MathJWT");
+            if (token == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            var currentUser = HttpContext.Session.GetString("currentUser");
+            decimal? result = 0;
+            MathCalculation mathCalculation;
+
+            try
+            {
+                mathCalculation = MathCalculation.Create(FirstNumber, SecondNumber, Operation, result, currentUser);
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = ex.Message;
+                ViewBag.Operations = GetOperations();
+                return View();
+            }
+
+            StringContent jsonContent = new(
+                JsonConvert.SerializeObject(mathCalculation),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "api/Math/PostCalculate");
+            request.Content = jsonContent;
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            HttpResponseMessage response = await httpClient!.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                MathCalculation? deserialisedResponse = JsonConvert.DeserializeObject<MathCalculation>(jsonResponse);
+
+                if (deserialisedResponse == null)
+                {
+                    ViewBag.Result = "Invalid response from server.";
+                    ViewBag.Operations = GetOperations();
+                    return View();
+                }
+
+                ViewBag.Result = deserialisedResponse.Result;
+                ViewBag.Operations = GetOperations();
+                return View();
+            }
+            else
+            {
+                ViewBag.Result = await response.Content.ReadAsStringAsync();
+                ViewBag.Operations = GetOperations();
+                return View();
+            }
+        }
+
+        [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+        public async Task<IActionResult> History()
+        {
+            var token = HttpContext.Session.GetString("MathJWT");
+            if (token == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, "api/Math/GetHistory");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            HttpResponseMessage response = await httpClient!.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                List<MathCalculation>? deserialisedResponse =
+                    JsonConvert.DeserializeObject<List<MathCalculation>>(jsonResponse);
+
+                if (deserialisedResponse == null || deserialisedResponse.Count == 0)
+                {
+                    ViewBag.HistoryMessage = "No history exists";
+                    return View(new List<MathCalculation>());
+                }
+
+                return View(deserialisedResponse);
+            }
+            else
+            {
+                ViewBag.HistoryMessage = "No history to show";
+                return View(new List<MathCalculation>());
+            }
+        }
+
+        [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+        public async Task<IActionResult> Clear()
+        {
+            var token = HttpContext.Session.GetString("MathJWT");
+            if (token == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Delete, "api/Math/DeleteHistory");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            HttpResponseMessage response = await httpClient!.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                TempData["HistoryMessage"] = "Failed to clear history.";
+            }
+
+            return RedirectToAction("History");
+        }
+
+        private static List<SelectListItem> GetOperations()
+        {
+            return new List<SelectListItem>
+            {
+                new SelectListItem { Value = "1", Text = "+" },
+                new SelectListItem { Value = "2", Text = "-" },
+                new SelectListItem { Value = "3", Text = "*" },
+                new SelectListItem { Value = "4", Text = "/" }
+            };
+        }
+    }
+}
 ```
 
 ### Update appsettings.json
@@ -475,9 +734,12 @@ services:
       ApiSettings__BaseUrl: "http://math-api:8080"
     ports:
       - "8082:8080"
+    volumes:
+      - client-dataprotection-keys:/keys
 
 volumes:
   mathdb_data:
+  client-dataprotection-keys:
 ```
 
 ### What does this file do?
@@ -520,9 +782,12 @@ volumes:
         - Client → math-api
         - etc.
 - Volume
-    mathdb_data
-    - stores database data permanently
-    - data persists even if containers stop
+    - mathdb_data
+        - stores database data permanently
+        - data persists even if containers stop
+    - client-dataprotection-keys
+        - stores the antiforgery tokens needed by the frontend between runs
+
 - Startup order
     - SQL Server starts
     - DB script runs
