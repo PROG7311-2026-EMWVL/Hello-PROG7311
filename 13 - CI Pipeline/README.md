@@ -65,11 +65,13 @@ Open your GitHub repository and go to:
 
     Settings -> Secrets and variables -> Actions
 
-Add these repository secrets:
+Add these three repository secrets:
 
     SA_PASSWORD=your_strong_sql_password_here
     FirebaseMathApp=your_firebase_api_key_here
     MathAppJwtKey=your_long_random_jwt_secret_here
+
+Note: You can reuse the existing secrets from your environment variables locally. You would actually need to retain the Firebase one.
 
 ### Notes
 
