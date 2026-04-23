@@ -71,13 +71,12 @@ Add these three repository secrets:
     FirebaseMathApp=your_firebase_api_key_here
     MathAppJwtKey=your_long_random_jwt_secret_here
 
-Note: You can reuse the existing secrets from your environment variables locally. You would actually need to retain the Firebase one.
-
 ### Notes
 
 * `SA_PASSWORD` is used by the SQL Server container.
-* `FirebaseMathApp` is read by the API.
+* `FirebaseMathApp` is read by the API - please use the same on from local.
 * `MathAppJwtKey` is used by the API for JWT authentication.
+* You can reuse the existing secrets from your environment variables locally.
 * These values should not be committed into the repository.
 
 ## Step 2: Package the database as its own image
