@@ -535,11 +535,13 @@ npm run test:api
 
 ## Step 5: Install Newman Locally
 
-In the root of the project, run:
+In the root of the project, run in cmd:
 
 ```bash
 npm install
 ```
+
+Note: if you get an npm not recognised, you will need to install Node.js on your machine (hint: https://nodejs.org/en).
 
 This will create a file named:
 
